@@ -1,0 +1,237 @@
+{
+  "schemaVersion": 1,
+  "actions": [
+    {
+      "id": "mongo.connections.list",
+      "title": "List saved MongoDB connections",
+      "summary": "Lists the MongoDB connections saved in the MongoDB panel: id, name, hosts, auth mechanism and user. Never returns passwords, keys or tokens. If none is saved, ask the user to add one in the MongoDB panel with F7.",
+      "doc": "actions/mongo.connections.list.md",
+      "class": "read",
+      "exposure": ["agent", "palette"],
+      "input": { "type": "object", "properties": {} },
+      "output": {
+        "type": "object",
+        "properties": {
+          "connections": {
+            "type": "array",
+            "description": "Saved connections, sorted by name",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id":       { "type": "string", "description": "Stable id; always unambiguous as a 'connection' argument" },
+                "name":     { "type": "string", "description": "Display name; also accepted as a 'connection' argument" },
+                "hosts":    { "type": "string", "description": "Scheme and hosts of the connection string, plus the SSH or SOCKS host it goes through" },
+                "auth":     { "type": "string", "description": "none, password, SCRAM-SHA-256, SCRAM-SHA-1, PLAIN, GSSAPI, MONGODB-X509, MONGODB-AWS or MONGODB-OIDC" },
+                "username": { "type": "string", "description": "Login user, or null" }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "mongo.databases.list",
+      "title": "List MongoDB databases",
+      "summary": "Lists the databases of a saved connection that the user may see, with their size on disk.",
+      "doc": "actions/mongo.databases.list.md",
+      "class": "read",
+      "exposure": ["agent", "palette"],
+      "input": {
+        "type": "object",
+        "required": ["connection"],
+        "properties": {
+          "connection": { "type": "string", "description": "Saved connection id or name (see mongo.connections.list)" }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "databases": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name":      { "type": "string" },
+                "sizeBytes": { "type": "integer", "description": "Size on disk; null when the server did not say" },
+                "empty":     { "type": "boolean" }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "mongo.collections.list",
+      "title": "List MongoDB collections",
+      "summary": "Lists the collections, views and time series collections of a database, with estimated document counts.",
+      "doc": "actions/mongo.collections.list.md",
+      "class": "read",
+      "exposure": ["agent", "palette"],
+      "input": {
+        "type": "object",
+        "required": ["connection", "database"],
+        "properties": {
+          "connection": { "type": "string", "description": "Saved connection id or name" },
+          "database":   { "type": "string", "description": "Database name (see mongo.databases.list)" },
+          "nameLike":   { "type": "string", "description": "Name pattern with * wildcards, matched ignoring case, e.g. 'order*'" },
+          "limit":      { "type": "integer", "minimum": 1, "maximum": 5000, "default": 500, "description": "Most entries to return" }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "database": { "type": "string" },
+          "collections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name":      { "type": "string" },
+                "type":      { "type": "string", "enum": ["collection", "view", "timeseries"] },
+                "docs":      { "type": "integer", "description": "Estimated document count from metadata; null for views and when there are over 200 collections" },
+                "viewOn":    { "type": "string", "description": "Views only: the collection the view reads" },
+                "timeField": { "type": "string", "description": "Time series only: the time field" },
+                "capped":    { "type": "boolean", "description": "Present and true for a capped collection" }
+              }
+            }
+          },
+          "total":     { "type": "integer", "description": "Entries found before the limit" },
+          "truncated": { "type": "boolean", "description": "Whether the limit cut the list" }
+        }
+      }
+    },
+    {
+      "id": "mongo.schema",
+      "title": "Sample a collection's schema",
+      "summary": "Describes the shape of a collection's documents from a random sample: every field path with its BSON types and how often it occurs, plus the indexes, the validator and, for a view, its pipeline.",
+      "doc": "actions/mongo.schema.md",
+      "class": "read",
+      "exposure": ["agent", "palette"],
+      "input": {
+        "type": "object",
+        "required": ["connection", "database", "collection"],
+        "properties": {
+          "connection": { "type": "string", "description": "Saved connection id or name" },
+          "database":   { "type": "string" },
+          "collection": { "type": "string", "description": "Collection, view or time series collection" },
+          "sampleSize": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 100, "description": "Documents to sample" }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "database":   { "type": "string" },
+          "collection": { "type": "string" },
+          "type":       { "type": "string", "enum": ["collection", "view", "timeseries"] },
+          "sampled":    { "type": "integer", "description": "Documents actually sampled" },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path":      { "type": "string", "description": "Dotted path as queries write it; fields of documents inside arrays included" },
+                "frequency": { "type": "number", "description": "Share of sampled documents that have the field, 0 to 1" },
+                "types":     { "type": "object", "description": "BSON type name to occurrences, e.g. {\"string\": 97, \"null\": 3}" },
+                "itemTypes": { "type": "object", "description": "Arrays only: type name of their items to occurrences" }
+              }
+            }
+          },
+          "fieldsTruncated": { "type": "boolean", "description": "Present and true when over 2000 field paths were seen" },
+          "indexes":      { "type": "array", "description": "The collection's indexes as listIndexes returns them; not for views" },
+          "validator":    { "type": "object", "description": "The JSON schema or query validator, if any" },
+          "viewOn":       { "type": "string", "description": "Views only" },
+          "viewPipeline": { "type": "array", "description": "Views only" },
+          "timeField":    { "type": "string", "description": "Time series only" }
+        }
+      }
+    },
+    {
+      "id": "mongo.count",
+      "title": "Count MongoDB documents",
+      "summary": "Counts the documents of a collection exactly, all of them or those matching a query filter.",
+      "doc": "actions/mongo.count.md",
+      "class": "read",
+      "exposure": ["agent", "palette"],
+      "input": {
+        "type": "object",
+        "required": ["connection", "database", "collection"],
+        "properties": {
+          "connection": { "type": "string", "description": "Saved connection id or name" },
+          "database":   { "type": "string" },
+          "collection": { "type": "string" },
+          "filter":     { "type": "object", "description": "Query filter, e.g. {\"status\": \"failed\"}; Extended JSON such as {\"$date\": ...} and {\"$oid\": ...} allowed; omitted counts everything" }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "database":   { "type": "string" },
+          "collection": { "type": "string" },
+          "count":      { "type": "integer" }
+        }
+      }
+    },
+    {
+      "id": "mongo.find",
+      "title": "Find MongoDB documents",
+      "summary": "Runs a read-only find on a collection or view: query filter, projection, sort, skip and limit. Returns the documents as relaxed Extended JSON.",
+      "doc": "actions/mongo.find.md",
+      "class": "read",
+      "exposure": ["agent", "palette"],
+      "input": {
+        "type": "object",
+        "required": ["connection", "database", "collection"],
+        "properties": {
+          "connection": { "type": "string", "description": "Saved connection id or name" },
+          "database":   { "type": "string" },
+          "collection": { "type": "string" },
+          "filter":     { "type": "object", "description": "Query filter; omitted matches everything" },
+          "projection": { "type": "object", "description": "Fields to return, e.g. {\"name\": 1, \"email\": 1, \"_id\": 0}" },
+          "sort":       { "type": "object", "description": "Sort, e.g. {\"createdAt\": -1}" },
+          "limit":      { "type": "integer", "minimum": 1, "maximum": 1000, "default": 20, "description": "Documents to return" },
+          "skip":       { "type": "integer", "minimum": 0, "maximum": 1000000, "default": 0, "description": "Documents to skip first" }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "database":   { "type": "string" },
+          "collection": { "type": "string" },
+          "documents":  { "type": "array", "description": "Documents in relaxed Extended JSON; a stand-in with _id and leftOut when one alone is over the size budget" },
+          "returned":   { "type": "integer" },
+          "truncated":  { "type": "boolean", "description": "Whether the size budget dropped documents; ask for fewer fields" }
+        }
+      }
+    },
+    {
+      "id": "mongo.aggregate",
+      "title": "Run a MongoDB aggregation",
+      "summary": "Runs a read-only aggregation pipeline on a collection or view: $match, $group, $lookup, $facet and every other stage except $out and $merge, which write and are refused.",
+      "doc": "actions/mongo.aggregate.md",
+      "class": "read",
+      "exposure": ["agent", "palette"],
+      "input": {
+        "type": "object",
+        "required": ["connection", "database", "collection", "pipeline"],
+        "properties": {
+          "connection": { "type": "string", "description": "Saved connection id or name" },
+          "database":   { "type": "string" },
+          "collection": { "type": "string" },
+          "pipeline":   { "type": "array", "items": { "type": "object" }, "description": "Pipeline stages, e.g. [{\"$match\": {...}}, {\"$group\": {...}}]" },
+          "limit":      { "type": "integer", "minimum": 1, "maximum": 1000, "default": 100, "description": "Results to return at most" }
+        }
+      },
+      "output": {
+        "type": "object",
+        "properties": {
+          "database":     { "type": "string" },
+          "collection":   { "type": "string" },
+          "documents":    { "type": "array", "description": "Results in relaxed Extended JSON" },
+          "returned":     { "type": "integer" },
+          "truncated":    { "type": "boolean", "description": "Whether the size budget dropped results" },
+          "limitReached": { "type": "boolean", "description": "Present and true when the pipeline may have more results than limit" }
+        }
+      }
+    }
+  ]
+}

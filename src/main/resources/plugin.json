@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "version": "${project.version}",
+  "platformSdkVersion": "${platform.sdk.min.version}",
+  "plugins": [
+    {
+      "class": "dev.nuclr.plugin.core.panel.mongodb.MongoFilePanelPlugin",
+      "type": "FilePanel",
+      "id": "dev.nuclr.plugin.core.panel.mongodb",
+      "name": "MongoDB Explorer",
+      "version": "${project.version}",
+      "description": "Browse MongoDB read-only: databases and collections as folders, with their indexes, stats, options, sampled schema and newest documents as files. Standalone, replica sets, sharded clusters and Atlas, over TLS, SSH or SOCKS5.",
+      "author": "Nuclr Development Team",
+      "license": "Apache-2.0",
+      "website": "https://nuclr.dev",
+      "pageUrl": "https://github.com/nuclrdev/plugin-filepanel-mongodb",
+      "docUrl": "https://github.com/nuclrdev/plugin-filepanel-mongodb",
+      "developer": "Official",
+      "singleton": false,
+      "connections": true
+    }
+  ]
+}
