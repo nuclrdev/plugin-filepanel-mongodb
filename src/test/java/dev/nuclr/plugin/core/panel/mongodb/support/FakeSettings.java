@@ -27,8 +27,14 @@ public final class FakeSettings implements NuclrSettings {
 
 	private final Map<String, Object> values = new HashMap<>();
 
+	/** Make every {@link #set} fail, as a full disk or a locked settings file does. */
+	public boolean failWrites;
+
 	@Override
 	public void set(String namespace, String key, Object value) {
+		if (failWrites) {
+			throw new IllegalStateException("settings write failed");
+		}
 		values.put(namespace + "|" + key, value);
 	}
 
@@ -51,6 +57,6 @@ public final class FakeSettings implements NuclrSettings {
 
 	/** Overwrite a stored value directly, to simulate a corrupted settings file. */
 	public void putRaw(String namespace, String key, Object value) {
-		set(namespace, key, value);
+		values.put(namespace + "|" + key, value);
 	}
 }

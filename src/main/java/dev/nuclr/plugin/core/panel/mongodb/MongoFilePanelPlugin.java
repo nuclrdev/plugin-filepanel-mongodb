@@ -72,6 +72,7 @@ import dev.nuclr.plugin.core.panel.mongodb.connection.ProxyType;
 import dev.nuclr.plugin.core.panel.mongodb.panel.ConnectionEditorDialog;
 import dev.nuclr.plugin.core.panel.mongodb.resource.MongoResource;
 import dev.nuclr.plugin.core.panel.mongodb.resource.ResourceKind;
+import dev.nuclr.plugin.core.panel.mongodb.transfer.MongoTransfer;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -122,6 +123,7 @@ public final class MongoFilePanelPlugin implements FilePanelNuclrPlugin {
 	private CredentialStore credentialStore;
 	private ConnectionRegistry connectionRegistry;
 	private MongoActions actions;
+	private MongoTransfer transfer;
 
 	private volatile boolean focused;
 	private volatile MongoResource currentResource;
@@ -148,6 +150,7 @@ public final class MongoFilePanelPlugin implements FilePanelNuclrPlugin {
 		this.connectionRegistry = sessionFactory == null ? new ConnectionRegistry()
 				: new ConnectionRegistry(sessionFactory);
 		this.actions = new MongoActions(profileStore, this::actionSession, connectionRegistry::disconnect);
+		this.transfer = new MongoTransfer(profileStore, credentialStore);
 		this.currentResource = MongoResource.explorerRoot();
 		log.info("MongoDB Explorer panel plugin loaded");
 	}
@@ -628,6 +631,12 @@ public final class MongoFilePanelPlugin implements FilePanelNuclrPlugin {
 	@Override
 	public void act(BaseNuclrPlugin other, String actionType, List<NuclrResource> selectedResources,
 			NuclrResource focusedResource, Map<String, Object> data, NuclrPluginCallback callback) {
+
+		// Configs > Export / Import in Commander: saved connections in and out.
+		if (MongoTransfer.handles(actionType)) {
+			transfer.handle(actionType, data);
+			return;
+		}
 
 		// Actions declared in actions.json (agents, command palette). They need no pane,
 		// selection or open resource, so they run the same on the headless instance the
